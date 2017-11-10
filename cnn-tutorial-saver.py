@@ -243,7 +243,7 @@ if args.batch_size:
     batch_size = args.batch_size
 else:
     batch_size = 96
-image_filenames = glob.glob("./imagenet-dogs/n02*/*.jpg")
+image_filenames = glob.glob("./Images/n02*/*.jpg")
 train_dataset, test_dataset, valid_dataset = create_dicts(image_filenames)
 train_data, train_labels = parse_dict(train_dataset)
 valid_data, valid_labels = parse_dict(valid_dataset)
