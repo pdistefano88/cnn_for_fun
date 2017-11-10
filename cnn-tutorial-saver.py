@@ -224,22 +224,30 @@ class cnn:
                 if step % 1000 == 0:
                     # Append the step number to the checkpoint name:
                     saver.save(sess, 'my-model', global_step=step_)
-            print('qua')
+            print('Training is done.')
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--initial_learning_rate", type = float ,  help="the initial learning rate. The learning rate is then linearly reduced by a factor of 100.")
+parser.add_argument("--initial_learning_rate", type = float ,  help="The initial learning rate. The learning rate is then linearly reduced by a factor of 100. Default is 0.001.")
+parser.add_argument("--training_steps", type = int ,  help="Number of training steps. Defalut is 100000.")
+parser.add_argument("--batch_size", type = int ,  help="Batch size. Defalut is 96.")
 args = parser.parse_args()
 if args.initial_learning_rate:
     lr_0 = args.initial_learning_rate
 else:
     lr_0 = 0.001
+if args.training_steps:
+    training_steps = args.training_steps
+else:
+    training_steps = 1000000
+if args.batch_size:
+    batch_size = args.batch_size
+else:
+    batch_size = 96
 image_filenames = glob.glob("./imagenet-dogs/n02*/*.jpg")
 train_dataset, test_dataset, valid_dataset = create_dicts(image_filenames)
 train_data, train_labels = parse_dict(train_dataset)
 valid_data, valid_labels = parse_dict(valid_dataset)
 test_data, test_labels = parse_dict(test_dataset)
-batch_size = 96
-
 my_cnn = cnn(train_data, train_labels, valid_data, valid_labels, test_data, test_labels, batch_size)
 my_cnn.training(lr_0, 0.01 * lr_0)
-my_cnn.train(100)
+my_cnn.train(training_steps)
