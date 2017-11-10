@@ -210,7 +210,7 @@ class cnn:
             for step in range(training_steps):
                 if step < last_upgrade:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
-                if step % 10 == 0:
+                if step % 100 == 0:
                     self.image_batch, self.label_batch = self.valid_iterator.get_next()
                     sess.run([self.valid_accuracy_update])
                     self.image_batch, self.label_batch = self.train_iterator.get_next()
