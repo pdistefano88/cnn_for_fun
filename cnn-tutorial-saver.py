@@ -125,7 +125,8 @@ class cnn:
                 512,
                 activation_fn=tf.nn.relu
                 )
-                hidden_layer_three = tf.nn.dropout(hidden_layer_three, 0.1)
+                self.kp = tf.placeholder(tf.float32)
+                hidden_layer_three = tf.nn.dropout(hidden_layer_three, self.kp)
                 final_fully_connected = tf.contrib.layers.fully_connected(
                     hidden_layer_three,
                     120
@@ -212,13 +213,13 @@ class cnn:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
                 if step % 100 == 0:
                     self.image_batch, self.label_batch = self.valid_iterator.get_next()
-                    sess.run([self.valid_accuracy_update])
+                    sess.run([self.valid_accuracy_update], feed_dict={self.kp : 1})
                     self.image_batch, self.label_batch = self.train_iterator.get_next()
-                    sess.run([self.training_accuracy_update])
+                    sess.run([self.training_accuracy_update], feed_dict={self.kp : 1})
                 _, step_, __ , summary = sess.run([self.train_op,
                                                              self.increment_step,
                                                              self.increment_loss,
-                                                             self.merged_summaries])
+                                                             self.merged_summaries], feed_dict={self.kp : 0.5})
                 writer.add_summary(summary, global_step=step_)
                 writer.flush()
                 if step % 1000 == 0:
