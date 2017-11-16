@@ -136,6 +136,14 @@ class cnn:
             with tf.name_scope('loss'):
                 self.loss_batch = tf.nn.softmax_cross_entropy_with_logits(logits=final_fully_connected,
                                                                labels = self.label_batch, name=None)
+                self.valid_loss_batch = tf.Variable(0.)
+                self.valid_loss_update = tf.assign(self.valid_loss_batch,
+                                                   tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+                                                       logits=final_fully_connected,labels = self.label_batch, name=None))
+                                                   )
+                tf.nn.softmax_cross_entropy_with_logits(logits=final_fully_connected,
+                                                                                      labels = self.label_batch, name=None)
+                
                 self.total_loss_batch = tf.reduce_mean(self.loss_batch)
             with tf.name_scope('train'):
                 self.learning_rate = tf.Variable(0., name='learning_rate')
@@ -154,7 +162,9 @@ class cnn:
                 training_accuracy = tf.Variable(0.)
                 self.training_accuracy_update = tf.assign(training_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1), tf.argmax(final_fully_connected, axis = 1)))
         
-                valid_accuracy_summary = tf.summary.scalar(name = 'valid_accuracy', tensor = valid_accuracy)
+                valid_accuracy_summary = tf.summary.scalar(name = 'valid_accuracy', tensor = self.valid_loss_batch)
+                valid_loss_summary = tf.summary.scalar(name = 'valid_loss', tensor = valid_accuracy)
+
                 training_accuracy_summary = tf.summary.scalar(name = 'training_accuracy', tensor = training_accuracy)
                 learning_rate_summary = tf.summary.scalar(name = 'lr', tensor = self.learning_rate)
                 self.merged_summaries = tf.summary.merge_all()
@@ -217,7 +227,7 @@ class cnn:
                 if step % 100 == 0:
                     valid_image_batch, valid_label_batch = sess.run(self.valid_iterator.get_next())
                     #self.image_batch, self.label_batch = self.valid_iterator.get_next()
-                    sess.run([self.valid_accuracy_update], feed_dict={self.kp : 1, self.image_batch : valid_image_batch, self.label_batch : valid_label_batch})
+                    sess.run([self.valid_accuracy_update, self.valid_loss_update], feed_dict={self.kp : 1, self.image_batch : valid_image_batch, self.label_batch : valid_label_batch})
                     #self.image_batch, self.label_batch = self.train_iterator.get_next()
                     sess.run([self.training_accuracy_update], feed_dict={self.kp : 1, self.image_batch : train_image_batch, self.label_batch : train_label_batch})
                 _, step_, __ , summary = sess.run([self.train_op,
