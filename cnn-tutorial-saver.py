@@ -103,7 +103,8 @@ class cnn:
             _, self.valid_iterator = self._getDataset(valid_data, valid_labels, "valid_dataset")
             _, self.test = self._getDataset(test_data, test_labels, "test_dataset")
             
-            self.image_batch, self.label_batch = self.train_iterator.get_next()
+            self.image_batch = tf.placeholder(dtype = tf.float32, shape = [None, 250, 151, 1])
+            self.label_batch = tf.placeholder(dtype = tf.int32)
             
             with tf.name_scope('Layer_1'):
                 self.out_l1 = self._conv_pool(image_batch=self.image_batch, num_channels=32, ksize_conv = [5,5],
@@ -202,24 +203,27 @@ class cnn:
         else:
             j = 0
         print("run n. %i" % (j))
-        
+
         if last_upgrade < 0:
             last_upgrade = training_steps
         with self.graph.as_default(), tf.Session() as sess, withableWriter('tensorboard/cnn/'+str(j), self.graph)  as writer:
             saver = tf.train.Saver(max_to_keep = 10)
             sess.run([tf.global_variables_initializer(), self.train_iterator.initializer, self.valid_iterator.initializer])
             for step in range(training_steps):
+                train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
+
                 if step < last_upgrade:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
                 if step % 100 == 0:
-                    self.image_batch, self.label_batch = self.valid_iterator.get_next()
-                    sess.run([self.valid_accuracy_update], feed_dict={self.kp : 1})
-                    self.image_batch, self.label_batch = self.train_iterator.get_next()
-                    sess.run([self.training_accuracy_update], feed_dict={self.kp : 1})
+                    valid_image_batch, valid_label_batch = sess.run(self.valid_iterator.get_next())
+                    #self.image_batch, self.label_batch = self.valid_iterator.get_next()
+                    sess.run([self.valid_accuracy_update], feed_dict={self.kp : 1, self.image_batch : valid_image_batch, self.label_batch : valid_label_batch})
+                    #self.image_batch, self.label_batch = self.train_iterator.get_next()
+                    sess.run([self.training_accuracy_update], feed_dict={self.kp : 1, self.image_batch : train_image_batch, self.label_batch : train_label_batch})
                 _, step_, __ , summary = sess.run([self.train_op,
                                                              self.increment_step,
                                                              self.increment_loss,
-                                                             self.merged_summaries], feed_dict={self.kp : 0.5})
+                                                             self.merged_summaries], feed_dict={self.kp : 0.5, self.image_batch : train_image_batch, self.label_batch : train_label_batch})
                 writer.add_summary(summary, global_step=step_)
                 writer.flush()
                 if step % 1000 == 0:
