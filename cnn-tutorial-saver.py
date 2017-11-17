@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import argparse
+import pickle
 from sklearn.utils import shuffle
 from itertools import groupby
 from collections import defaultdict
@@ -72,6 +73,42 @@ def create_dicts(image_filenames, shuff = True):
         assert round(breed_valid_count / (breed_training_count + breed_testing_count + breed_valid_count), 2) > 0.13,    "Not enough validation images."
 
     return training_dataset, testing_dataset, valid_dataset
+
+def create_dataset():
+    image_filenames = glob.glob("./Images/n02*/*.jpg")
+    train_dataset, test_dataset, valid_dataset = create_dicts(image_filenames)    
+    train_data, train_labels = parse_dict(train_dataset)
+    valid_data, valid_labels = parse_dict(valid_dataset)
+    test_data, test_labels = parse_dict(test_dataset)
+    with open('train_data.pkl', 'wb') as df, open('train_labels.pkl', 'wb') as lf:
+        pickle.dump(train_data,file = df)
+        pickle.dump(train_labels,file = lf)
+        
+    with open('test_data.pkl', 'wb') as df, open('test_labels.pkl', 'wb') as lf:
+        pickle.dump(test_data,file = df)
+        pickle.dump(test_labels,file = lf)
+        
+    with open('valid_data.pkl', 'wb') as df, open('valid_labels.pkl', 'wb') as lf:
+        pickle.dump(valid_data,file = df)
+        pickle.dump(valid_labels,file = lf)
+        
+    return train_data, train_labels, test_data, test_labels, valid_data, valid_labels
+
+def get_dataset_from_backup():
+    with open('train_data.pkl', 'rb') as df, open('train_labels.pkl', 'rb') as lf:
+        train_data = pickle.load(df)
+        train_labels = pickle.load(lf)
+        
+    with open('test_data.pkl', 'rb') as df, open('test_labels.pkl', 'rb') as lf:
+        test_data = pickle.load(df)
+        test_labels = pickle.load(lf)
+        
+    with open('valid_data.pkl', 'rb') as df, open('valid_labels.pkl', 'rb') as lf:
+        valid_data = pickle.load(df)
+        valid_labels = pickle.load(lf)
+        
+    return train_data, train_labels, test_data, test_labels, valid_data, valid_labels
+    
         
 class withableWriter:
     ##Opens a tf.summary.FileWriter at the beginning of a with clause and closes it the end 
@@ -128,20 +165,20 @@ class cnn:
                 )
                 self.kp = tf.placeholder(tf.float32)
                 hidden_layer_three = tf.nn.dropout(hidden_layer_three, self.kp)
-                final_fully_connected = tf.contrib.layers.fully_connected(
+                self.final_fully_connected = tf.contrib.layers.fully_connected(
                     hidden_layer_three,
                     120
                 )
 
             with tf.name_scope('loss'):
-                self.loss_batch = tf.nn.softmax_cross_entropy_with_logits(logits=final_fully_connected,
+                self.loss_batch = tf.nn.softmax_cross_entropy_with_logits(logits=self.final_fully_connected,
                                                                labels = self.label_batch, name=None)
                 self.valid_loss_batch = tf.Variable(0.)
                 self.valid_loss_update = tf.assign(self.valid_loss_batch,
                                                    tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-                                                       logits=final_fully_connected,labels = self.label_batch, name=None))
+                                                       logits=self.final_fully_connected,labels = self.label_batch, name=None))
                                                    )
-                tf.nn.softmax_cross_entropy_with_logits(logits=final_fully_connected,
+                tf.nn.softmax_cross_entropy_with_logits(logits=self.final_fully_connected,
                                                                                       labels = self.label_batch, name=None)
                 
                 self.total_loss_batch = tf.reduce_mean(self.loss_batch)
@@ -158,9 +195,9 @@ class cnn:
                 total_loss_summary = tf.summary.scalar(name = 'loss', tensor = total_loss)
                 total_loss_batch_summary = tf.summary.scalar(name = 'loss_batch', tensor = self.total_loss_batch)
                 valid_accuracy = tf.Variable(0.)
-                self.valid_accuracy_update = tf.assign(valid_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1),     tf.argmax(final_fully_connected, axis = 1)))
+                self.valid_accuracy_update = tf.assign(valid_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1),     tf.argmax(self.final_fully_connected, axis = 1)))
                 training_accuracy = tf.Variable(0.)
-                self.training_accuracy_update = tf.assign(training_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1), tf.argmax(final_fully_connected, axis = 1)))
+                self.training_accuracy_update = tf.assign(training_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1), tf.argmax(self.final_fully_connected, axis = 1)))
         
                 valid_accuracy_summary = tf.summary.scalar(name = 'valid_accuracy', tensor = self.valid_loss_batch)
                 valid_loss_summary = tf.summary.scalar(name = 'valid_loss', tensor = valid_accuracy)
@@ -221,7 +258,8 @@ class cnn:
             sess.run([tf.global_variables_initializer(), self.train_iterator.initializer, self.valid_iterator.initializer])
             for step in range(training_steps):
                 train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
-
+                print(np.sum(train_image_batch, axis=(1,2,3)))
+                print(np.argmax(train_label_batch, axis = 1))
                 if step < last_upgrade:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
                 if step % 100 == 0:
@@ -238,13 +276,45 @@ class cnn:
                 writer.flush()
                 if step % 1000 == 0:
                     # Append the step number to the checkpoint name:
-                    saver.save(sess, 'my-model', global_step=step_)
+                    full_path = saver_path + "/" + str(j)
+                    if not os.path.exists(full_path):
+                        os.makedirs(full_path)
+                    
+                    saver.save(sess, full_path + "/my-model", global_step=step_)
             print('Training is done.')
+
+    def predict(self, fn_batch):
+            
+        with self.graph.as_default(), tf.Session() as sess:
+            saver = tf.train.Saver()
+            saver.restore(sess, 'my-model-20001')
+            print(sess.run(self.learning_rate))
+            train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
+            print(np.sum(train_image_batch, axis=(1,2,3)))
+            print(np.argmax(train_label_batch, axis = 1))
+            
+            batch_list = []
+            if not isinstance(fn_batch, list):
+                fn_batch = [fn_batch]
+            for i in range(len(fn_batch)):
+                img, _ = input_parser(fn_batch[i], 0)
+                batch_list.append(img)
+
+            batch = sess.run(tf.stack(batch_list))                        
+            rv = sess.run(tf.argmax(self.final_fully_connected, axis = 1), feed_dict={self.kp : 1, self.image_batch : batch})
+        return rv
+
+    def restore(self, path):
+        with self.graph.as_default(), tf.Session() as sess:
+            print('restoring...')
+            saver = tf.train.Saver()
+            saver.restore(sess, path)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--initial_learning_rate", type = float ,  help="The initial learning rate. The learning rate is then linearly reduced by a factor of 100. Default is 0.001.")
 parser.add_argument("--training_steps", type = int ,  help="Number of training steps. Defalut is 100000.")
 parser.add_argument("--batch_size", type = int ,  help="Batch size. Defalut is 96.")
+parser.add_argument("--load_dataset_splits_from_pickles", type = int ,  help="Load train, validation and test set files from disk (yes, default) or create from scratch.")
 args = parser.parse_args()
 if args.initial_learning_rate:
     lr_0 = args.initial_learning_rate
@@ -258,11 +328,27 @@ if args.batch_size:
     batch_size = args.batch_size
 else:
     batch_size = 96
-image_filenames = glob.glob("./Images/n02*/*.jpg")
-train_dataset, test_dataset, valid_dataset = create_dicts(image_filenames)
-train_data, train_labels = parse_dict(train_dataset)
-valid_data, valid_labels = parse_dict(valid_dataset)
-test_data, test_labels = parse_dict(test_dataset)
+    
+if args.load_dataset_splits_from_pickles:
+    load_dataset_splits_from_pickles = args.load_dataset_splits_from_pickles
+else:
+    load_dataset_splits_from_pickles = 'yes'
+
+if load_dataset_splits_from_pickles == 'yes':
+    train_data, train_labels, test_data, test_labels, valid_data, valid_labels = get_dataset_from_backup()
+else:
+    train_data, train_labels, test_data, test_labels, valid_data, valid_labels = create_dataset()
+ 
+
 my_cnn = cnn(train_data, train_labels, valid_data, valid_labels, test_data, test_labels, batch_size)
 my_cnn.training(lr_0, 0.01 * lr_0)
 my_cnn.train(training_steps)
+#my_cnn.restore("my-model-20001")
+
+#img, _ = input_parser(test_data[0], 0)
+
+#print(img)
+#img.shape
+#print(test_data)
+#for i in range(len(test_data)):
+    #print("predicted %s, true %s" % (my_cnn.predict(train_data[i])[0], train_labels[i]))
