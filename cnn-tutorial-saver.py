@@ -258,8 +258,6 @@ class cnn:
             sess.run([tf.global_variables_initializer(), self.train_iterator.initializer, self.valid_iterator.initializer])
             for step in range(training_steps):
                 train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
-                print(np.sum(train_image_batch, axis=(1,2,3)))
-                print(np.argmax(train_label_batch, axis = 1))
                 if step < last_upgrade:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
                 if step % 100 == 0:
