@@ -341,7 +341,7 @@ else:
 
 train_mat = sio.loadmat('svhn/train_32x32.mat')
 test_mat = sio.loadmat('svhn/test_32x32.mat')
-extra_mat = sio.loadmat('svhn/extra_32x32.mat')
+#extra_mat = sio.loadmat('svhn/extra_32x32.mat')
 
 train_mat['X'] = np.reshape(train_mat['X'], (-1, 32, 32, 3))
 test_mat['X'] = np.reshape(test_mat['X'], (-1, 32, 32, 3))
