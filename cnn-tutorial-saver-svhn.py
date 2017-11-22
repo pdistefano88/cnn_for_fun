@@ -37,16 +37,8 @@ def input_parser(img, label):
     ##Input transformation routine for tensorflow dataset API
     ##Takes a jpg filename path, decodes the image, converts to greyscale and resizes it
     ##Encodes the labels into one-hot
-    # convert the label to one-hot encoding
     one_hot = tf.one_hot(label, num_classes)
-
-    # read the img from file
-    #img_file = img
-    #img_decoded = tf.image.decode_jpeg(img_file)
-    grayscale_image = tf.image.rgb_to_grayscale(img)
-    #resized_image = tf.image.resize_images(grayscale_image, size = [250, 151])
-
-    return grayscale_image, one_hot
+    return img, one_hot
 
 def create_dicts(image_filenames, shuff = True):
     ##Creates a dictionary to be parsed by parse_dict
@@ -141,7 +133,7 @@ class cnn:
             _, self.valid_iterator = self._getDataset(valid_data, valid_labels, "valid_dataset")
             _, self.test = self._getDataset(test_data, test_labels, "test_dataset")
             
-            self.image_batch = tf.placeholder(dtype = tf.float32, shape = [None, 32, 32, 1])
+            self.image_batch = tf.placeholder(dtype = tf.float32, shape = [None, 32, 32, 3])
             self.label_batch = tf.placeholder(dtype = tf.int32)
             
             with tf.name_scope('Layer_1'):
@@ -341,20 +333,28 @@ else:
 
 train_mat = sio.loadmat('svhn/train_32x32.mat')
 test_mat = sio.loadmat('svhn/test_32x32.mat')
-#extra_mat = sio.loadmat('svhn/extra_32x32.mat')
+extra_mat = sio.loadmat('svhn/extra_32x32.mat')
 
 train_mat['X'] = np.reshape(train_mat['X'], (-1, 32, 32, 3))
 test_mat['X'] = np.reshape(test_mat['X'], (-1, 32, 32, 3))
+extra_mat['X'] = np.reshape(extra_mat['X'], (-1, 32, 32, 3))
 train_mat['y'] = list(np.reshape(train_mat['y'], -1))
 test_mat['y'] = list(np.reshape(test_mat['y'], -1))
+extra_mat['y'] = list(np.reshape(extra_mat['y'], -1))
 
-train_data = train_mat['X'][1:(len(train_mat['X']) - 6000), :, :, :]
-valid_data = train_mat['X'][(len(train_mat['X']) - 6000):len(train_mat['X']), :, :, :]# + extra_mat['X'][1:200]
+print(len(train_mat['y']))
+
+train_data = np.concatenate((train_mat['X'][:(len(train_mat['X']) - 4000), :, :, :], extra_mat['X'][:(len(extra_mat['X'])-2000), :, :, :]))
+valid_data = np.concatenate((train_mat['X'][(len(train_mat['X']) - 4000):len(train_mat['X']), :, :, :],  extra_mat['X'][(len(extra_mat['X'])-2000):len(extra_mat['X'])]))
 test_data = test_mat['X']
 
-train_labels = train_mat['y'][1:(len(train_mat['y']) - 6000)]
-valid_labels = train_mat['y'][(len(train_mat['y']) - 6000):len(train_mat['y'])]# + extra_mat['y'][1:200]
+train_labels = train_mat['y'][:(len(train_mat['y']) - 4000)] + extra_mat['y'][:(len(extra_mat['y'])-2000)]
+valid_labels = train_mat['y'][(len(train_mat['y']) - 4000):len(train_mat['y'])] + extra_mat['y'][(len(extra_mat['y'])-2000):len(extra_mat['y'])]
 test_labels = test_mat['y']
+
+#train_data_indices = [i for i in range(len(train_data))]
+#valid_data_indices = [i for i in range(len(valid_data))]
+#test_data_indices = [i for i in range(len(test_data))]
 
 for k, vl in train_mat.items():
     print(k)
