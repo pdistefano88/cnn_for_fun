@@ -110,7 +110,7 @@ class withableWriter:
         self.graph = graph
         
     def __enter__(self):
-        self.writer = tf.summary.FileWriter(self.directory, self.graph)
+        self.writer = tf.summary.FileWriter(self.directory)
         self.writer.flush()
 
         return(self.writer)
