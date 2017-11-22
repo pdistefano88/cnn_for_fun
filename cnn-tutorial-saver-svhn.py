@@ -137,23 +137,26 @@ class cnn:
             self.label_batch = tf.placeholder(dtype = tf.int32)
             
             with tf.name_scope('Layer_1'):
-                self.out_l1 = self._conv_pool(image_batch=self.image_batch, num_channels=32, ksize_conv = [5,5],
-                                              stride_conv=[2,2], ksize_pool=[2,2], stride_pool=[2,2])
+                self.out_l1 = self._conv_pool(image_batch=self.image_batch, num_channels=96, ksize_conv = [5,5],
+                                              stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
         
             with tf.name_scope('Layer_2'):
-                self.out_l2 = self._conv_pool(self.out_l1, num_channels = 64, ksize_conv = [5,5],
-                                                          stride_conv=[1,1], ksize_pool=[2,2], stride_pool=[2,2])
+                self.out_l2 = self._conv_pool(self.out_l1, num_channels = 128, ksize_conv = [5,5],
+                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
+            with tf.name_scope('Layer_3'):
+                self.out_l3 = self._conv_pool(self.out_l2, num_channels = 256, ksize_conv = [5,5],
+                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
             with tf.name_scope('output_Layer'):
-                pl2_shape = list(self.out_l2.get_shape())
+                pl3_shape = list(self.out_l3.get_shape())
                 flattened_layer_two = tf.reshape(
-                self.out_l2,
+                self.out_l3,
                 [
                     -1,  # Each image in the image_batch
-                    int(pl2_shape[1] * pl2_shape[2] * pl2_shape[3])         # Every other dimension of the input
+                    int(pl3_shape[1] * pl3_shape[2] * pl3_shape[3])         # Every other dimension of the input
                 ])
                 hidden_layer_three = tf.contrib.layers.fully_connected(
                 flattened_layer_two,
-                512,
+                2048,
                 activation_fn=tf.nn.relu
                 )
                 self.kp = tf.placeholder(tf.float32)
