@@ -139,30 +139,34 @@ class cnn:
             with tf.name_scope('Layer_1'):
                 self.out_l1 = self._conv_pool(image_batch=self.image_batch, num_channels=96, ksize_conv = [5,5],
                                               stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
+                print(tf.shape(self.out_l1))
         
             with tf.name_scope('Layer_2'):
                 self.out_l2 = self._conv_pool(self.out_l1, num_channels = 128, ksize_conv = [5,5],
                                                           stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
+                print(tf.shape(self.out_l2))
             with tf.name_scope('Layer_3'):
                 self.out_l3 = self._conv_pool(self.out_l2, num_channels = 256, ksize_conv = [5,5],
                                                           stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
+                print(tf.shape(self.out_l3))
             with tf.name_scope('output_Layer'):
                 pl3_shape = list(self.out_l3.get_shape())
-                flattened_layer_two = tf.reshape(
+                self.flattened_layer_two = tf.reshape(
                 self.out_l3,
                 [
                     -1,  # Each image in the image_batch
                     int(pl3_shape[1] * pl3_shape[2] * pl3_shape[3])         # Every other dimension of the input
                 ])
+                print(tf.shape(self.flattened_layer_two))
                 hidden_layer_three = tf.contrib.layers.fully_connected(
-                flattened_layer_two,
+                self.flattened_layer_two,
                 2048,
                 activation_fn=tf.nn.relu
                 )
                 self.kp = tf.placeholder(tf.float32)
-                hidden_layer_three = tf.nn.dropout(hidden_layer_three, self.kp)
+                self.hidden_layer_three = tf.nn.dropout(hidden_layer_three, self.kp)
                 self.final_fully_connected = tf.contrib.layers.fully_connected(
-                    hidden_layer_three,
+                    self.hidden_layer_three,
                     num_classes
                 )
 
@@ -207,6 +211,7 @@ class cnn:
         with tf.name_scope(name_scope):
             num_classes = self.num_classes            
             ds = tf.contrib.data.Dataset.from_tensor_slices((data, labels))
+            ds = ds.shuffle(buffer_size=len(labels))
             ds = ds.map(input_parser)
             ds = ds.repeat(rep)
             ds = ds.batch(batch_size)
@@ -282,10 +287,8 @@ class cnn:
         with self.graph.as_default(), tf.Session() as sess:
             saver = tf.train.Saver()
             saver.restore(sess, 'my-model-20001')
-            print(sess.run(self.learning_rate))
+
             train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
-            print(np.sum(train_image_batch, axis=(1,2,3)))
-            print(np.argmax(train_label_batch, axis = 1))
             
             batch_list = []
             if not isinstance(fn_batch, list):
@@ -345,8 +348,6 @@ train_mat['y'] = list(np.reshape(train_mat['y'], -1))
 test_mat['y'] = list(np.reshape(test_mat['y'], -1))
 extra_mat['y'] = list(np.reshape(extra_mat['y'], -1))
 
-print(len(train_mat['y']))
-
 train_data = np.concatenate((train_mat['X'][:(len(train_mat['X']) - 4000), :, :, :], extra_mat['X'][:(len(extra_mat['X'])-2000), :, :, :]))
 valid_data = np.concatenate((train_mat['X'][(len(train_mat['X']) - 4000):len(train_mat['X']), :, :, :],  extra_mat['X'][(len(extra_mat['X'])-2000):len(extra_mat['X'])]))
 test_data = test_mat['X']
@@ -359,8 +360,7 @@ test_labels = test_mat['y']
 #valid_data_indices = [i for i in range(len(valid_data))]
 #test_data_indices = [i for i in range(len(test_data))]
 
-for k, vl in train_mat.items():
-    print(k)
+
 
 my_cnn = cnn(train_data, train_labels, valid_data, valid_labels, test_data, test_labels, batch_size)
 my_cnn.training(lr_0, 0.01 * lr_0)
