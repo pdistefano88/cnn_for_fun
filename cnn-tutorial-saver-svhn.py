@@ -38,7 +38,7 @@ def input_parser(img, label):
     ##Takes a jpg filename path, decodes the image, converts to greyscale and resizes it
     ##Encodes the labels into one-hot
     one_hot = tf.one_hot(label, num_classes)
-    return img, one_hot
+    return tf.image.per_image_standardization(img), one_hot
 
 def create_dicts(image_filenames, shuff = True):
     ##Creates a dictionary to be parsed by parse_dict
