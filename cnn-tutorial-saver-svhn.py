@@ -129,27 +129,31 @@ class cnn:
         self.graph = graph
         with self.graph.as_default():
             self.batch_size = batch_size
-            _, self.train_iterator = self._getDataset(train_data, train_labels, "train_dataset")
-            _, self.valid_iterator = self._getDataset(valid_data, valid_labels, "valid_dataset")
-            _, self.test = self._getDataset(test_data, test_labels, "test_dataset")
+            _, self.train_iterator = self._getDataset(train_data, train_labels, "train_dataset", self.batch_size)
+            _, self.valid_iterator = self._getDataset(valid_data, valid_labels, "valid_dataset", len(valid_labels))
+            _, self.test = self._getDataset(test_data, test_labels, "test_dataset", len(test_labels))
             
             self.image_batch = tf.placeholder(dtype = tf.float32, shape = [None, 32, 32, 3])
             self.label_batch = tf.placeholder(dtype = tf.int32)
-            
+            self.kp_in = tf.placeholder(tf.float32)
+
             with tf.name_scope('Layer_1'):
-                self.out_l1 = self._conv_pool(image_batch=self.image_batch, num_channels=96, ksize_conv = [5,5],
-                                              stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
+                self.kp_cl1 = tf.placeholder(tf.float32)
+                self.out_l1 = tf.nn.dropout( self._conv_pool(image_batch=self.image_batch, num_channels = 96, ksize_conv = [5,5],
+                                              stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2]),
+                                             self.kp_cl1)
                 print(tf.shape(self.out_l1))
         
             with tf.name_scope('Layer_2'):
-                self.out_l2 = self._conv_pool(self.out_l1, num_channels = 128, ksize_conv = [5,5],
-                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
-                print(tf.shape(self.out_l2))
+                self.kp_cl2 = tf.placeholder(tf.float32)                
+                self.out_l2 = tf.nn.dropout( self._conv_pool(self.out_l1, num_channels = 128, ksize_conv = [5,5],
+                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2]),
+                                             self.kp_cl2)
             with tf.name_scope('Layer_3'):
-                self.out_l3 = self._conv_pool(self.out_l2, num_channels = 256, ksize_conv = [5,5],
-                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2])
-                print(tf.shape(self.out_l3))
-            with tf.name_scope('output_Layer'):
+                self.kp_cl3 = tf.placeholder(tf.float32)                
+                self.out_l3 = tf.nn.dropout( self._conv_pool(self.out_l2, num_channels = 256, ksize_conv = [5,5],
+                                                          stride_conv=[1,1], ksize_pool=[3,3], stride_pool=[2,2]),
+                                             self.kp_cl3)
                 pl3_shape = list(self.out_l3.get_shape())
                 self.flattened_layer_two = tf.reshape(
                 self.out_l3,
@@ -157,16 +161,28 @@ class cnn:
                     -1,  # Each image in the image_batch
                     int(pl3_shape[1] * pl3_shape[2] * pl3_shape[3])         # Every other dimension of the input
                 ])
-                print(tf.shape(self.flattened_layer_two))
-                hidden_layer_three = tf.contrib.layers.fully_connected(
+
+            with tf.name_scope('fully_connected_1'):
+
+                self.kp_fcl1 = tf.placeholder(tf.float32)                    
+                self.fully_connected_layer_1 = tf.nn.dropout( tf.contrib.layers.fully_connected(
                 self.flattened_layer_two,
                 2048,
-                activation_fn=tf.nn.relu
-                )
-                self.kp = tf.placeholder(tf.float32)
-                self.hidden_layer_three = tf.nn.dropout(hidden_layer_three, self.kp)
+                activation_fn=tf.nn.relu),
+                                                             self.kp_fcl1)
+                
+            with tf.name_scope('fully_connected_2'):
+                
+                self.kp_fcl2 = tf.placeholder(tf.float32)                    
+                self.fully_connected_layer_2 = tf.nn.dropout( tf.contrib.layers.fully_connected(
+                                self.fully_connected_layer_1,
+                            2048,
+                            activation_fn=tf.nn.relu),
+                                                                          self.kp_fcl2)
+            with tf.name_scope('output_layer'):
+
                 self.final_fully_connected = tf.contrib.layers.fully_connected(
-                    self.hidden_layer_three,
+                    self.fully_connected_layer_2,
                     num_classes
                 )
 
@@ -199,15 +215,14 @@ class cnn:
                 training_accuracy = tf.Variable(0.)
                 self.training_accuracy_update = tf.assign(training_accuracy, tf.contrib.metrics.accuracy(tf.argmax(self.label_batch, axis = 1), tf.argmax(self.final_fully_connected, axis = 1)))
         
-                valid_accuracy_summary = tf.summary.scalar(name = 'valid_accuracy', tensor = self.valid_loss_batch)
-                valid_loss_summary = tf.summary.scalar(name = 'valid_loss', tensor = valid_accuracy)
+                valid_accuracy_summary = tf.summary.scalar(name = 'valid_loss', tensor = self.valid_loss_batch)
+                valid_loss_summary = tf.summary.scalar(name = 'valid_accuracy', tensor = valid_accuracy)
 
                 training_accuracy_summary = tf.summary.scalar(name = 'training_accuracy', tensor = training_accuracy)
                 learning_rate_summary = tf.summary.scalar(name = 'lr', tensor = self.learning_rate)
                 self.merged_summaries = tf.summary.merge_all()
-   
 
-    def _getDataset(self, data, labels, name_scope, rep = 1000000000):
+    def _getDataset(self, data, labels, name_scope, batch_size, rep = 1000000000):
         with tf.name_scope(name_scope):
             num_classes = self.num_classes            
             ds = tf.contrib.data.Dataset.from_tensor_slices((data, labels))
@@ -264,13 +279,31 @@ class cnn:
                 if step % 100 == 0:
                     valid_image_batch, valid_label_batch = sess.run(self.valid_iterator.get_next())
                     #self.image_batch, self.label_batch = self.valid_iterator.get_next()
-                    sess.run([self.valid_accuracy_update, self.valid_loss_update], feed_dict={self.kp : 1, self.image_batch : valid_image_batch, self.label_batch : valid_label_batch})
+                    sess.run([self.valid_accuracy_update, self.valid_loss_update], feed_dict={self.kp_cl1 : 1,
+                                                                                                self.kp_cl2 : 1,
+                                                                                                self.kp_cl3 : 1,
+                                                                                                self.kp_fcl1 : 1,
+                                                                                                self.kp_fcl2 : 1,
+                                                                                                self.image_batch : valid_image_batch,
+                                                                                                self.label_batch : valid_label_batch})
                     #self.image_batch, self.label_batch = self.train_iterator.get_next()
-                    sess.run([self.training_accuracy_update], feed_dict={self.kp : 1, self.image_batch : train_image_batch, self.label_batch : train_label_batch})
+                    sess.run([self.training_accuracy_update], feed_dict={self.kp_cl1 : 1,
+                                                                                                self.kp_cl2 : 1,
+                                                                                                self.kp_cl3 : 1,
+                                                                                                self.kp_fcl1 : 1,
+                                                                                                self.kp_fcl2 : 1,
+                                                                                                self.image_batch : train_image_batch,
+                                                                                                self.label_batch : train_label_batch})
                 _, step_, __ , summary = sess.run([self.train_op,
                                                              self.increment_step,
                                                              self.increment_loss,
-                                                             self.merged_summaries], feed_dict={self.kp : 0.5, self.image_batch : train_image_batch, self.label_batch : train_label_batch})
+                                                             self.merged_summaries], feed_dict={self.kp_cl1 : 0.75,
+                                                                                                self.kp_cl2 : 0.75,
+                                                                                                self.kp_cl3 : 0.5,
+                                                                                                self.kp_fcl1 : 0.5,
+                                                                                                self.kp_fcl2 : 0.5,
+                                                                                                self.image_batch : tf.nn.dropout(train_image_batch, 0.9),
+                                                                                                self.label_batch : train_label_batch})
                 writer.add_summary(summary, global_step=step_)
                 writer.flush()
                 if step % 1000 == 0:
@@ -286,10 +319,7 @@ class cnn:
             
         with self.graph.as_default(), tf.Session() as sess:
             saver = tf.train.Saver()
-            saver.restore(sess, 'my-model-20001')
-
-            train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
-            
+            saver.restore(sess, 'my-model-20001')            
             batch_list = []
             if not isinstance(fn_batch, list):
                 fn_batch = [fn_batch]
@@ -298,7 +328,12 @@ class cnn:
                 batch_list.append(img)
 
             batch = sess.run(tf.stack(batch_list))                        
-            rv = sess.run(tf.argmax(self.final_fully_connected, axis = 1), feed_dict={self.kp : 1, self.image_batch : batch})
+            rv = sess.run(tf.argmax(self.final_fully_connected, axis = 1), feed_dict={self.kp_cl1 : 1,
+                                                                                                self.kp_cl2 : 1,
+                                                                                                self.kp_cl3 : 1,
+                                                                                                self.kp_fcl1 : 1,
+                                                                                                self.kp_fcl2 : 1,
+                                                                                                self.image_batch : batch})
         return rv
 
     def restore(self, path):
@@ -356,21 +391,6 @@ train_labels = train_mat['y'][:(len(train_mat['y']) - 4000)] + extra_mat['y'][:(
 valid_labels = train_mat['y'][(len(train_mat['y']) - 4000):len(train_mat['y'])] + extra_mat['y'][(len(extra_mat['y'])-2000):len(extra_mat['y'])]
 test_labels = test_mat['y']
 
-#train_data_indices = [i for i in range(len(train_data))]
-#valid_data_indices = [i for i in range(len(valid_data))]
-#test_data_indices = [i for i in range(len(test_data))]
-
-
-
 my_cnn = cnn(train_data, train_labels, valid_data, valid_labels, test_data, test_labels, batch_size)
 my_cnn.training(lr_0, 0.01 * lr_0)
 my_cnn.train(training_steps)
-#my_cnn.restore("my-model-20001")
-
-#img, _ = input_parser(test_data[0], 0)
-
-#print(img)
-#img.shape
-#print(test_data)
-#for i in range(len(test_data)):
-    #print("predicted %s, true %s" % (my_cnn.predict(train_data[i])[0], train_labels[i]))
