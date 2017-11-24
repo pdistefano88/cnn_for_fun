@@ -276,7 +276,7 @@ class cnn:
                 train_image_batch, train_label_batch = sess.run(self.train_iterator.get_next())
                 if step < last_upgrade:
                     sess.run(self.learning_rate.assign(self.lr_0 + step/last_upgrade * (self.lr_inf - self.lr_0)))
-                if step % 100 == 0:
+                if step % 1000 == 0:
                     valid_image_batch, valid_label_batch = sess.run(self.valid_iterator.get_next())
                     #self.image_batch, self.label_batch = self.valid_iterator.get_next()
                     sess.run([self.valid_accuracy_update, self.valid_loss_update], feed_dict={self.kp_cl1 : 1,
@@ -302,7 +302,7 @@ class cnn:
                                                                                                 self.kp_cl3 : 0.5,
                                                                                                 self.kp_fcl1 : 0.5,
                                                                                                 self.kp_fcl2 : 0.5,
-                                                                                                self.image_batch : tf.nn.dropout(train_image_batch, 0.9),
+                                                                                                self.image_batch : sess.run(tf.nn.dropout(train_image_batch, 0.9)),
                                                                                                 self.label_batch : train_label_batch})
                 writer.add_summary(summary, global_step=step_)
                 writer.flush()
